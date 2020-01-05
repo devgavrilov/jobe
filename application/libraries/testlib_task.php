@@ -61,6 +61,6 @@ class TestLib_Task extends Task {
         $returnVal = 0;
         exec('sh -c ' . escapeshellarg($wrappedCmd . ' prog.in prog.in prog.in'), $output, $returnVal);
 
-        return array($returnVal, '');
+        return array($returnVal . '|' . implode(' ', $output), '');
     }
 };
