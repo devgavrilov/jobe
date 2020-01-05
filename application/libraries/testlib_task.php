@@ -57,7 +57,7 @@ class TestLib_Task extends Task {
         fwrite($f, $stdin);
         fclose($f);
 
-        $output = null;
+        $output = array();
         $returnVal = 0;
         exec('sh -c ' . escapeshellarg($wrappedCmd . ' prog.in prog.in prog.in'), $output, $returnVal);
 
