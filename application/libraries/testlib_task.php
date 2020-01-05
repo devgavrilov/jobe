@@ -30,7 +30,7 @@ class TestLib_Task extends Task {
         $this->executableFileName = $execFileName = "$src.exe";
         $compileargs = $this->getParam('compileargs');
         $linkargs = $this->getParam('linkargs');
-        $cmd = "g++ " . implode(' ', $compileargs) . " -o $execFileName -c $src " . implode(' ', $linkargs);
+        $cmd = "g++ " . implode(' ', $compileargs) . " -x c++ -o $execFileName $src " . implode(' ', $linkargs);
         list($output, $this->cmpinfo) = parent::run_in_sandbox($cmd);
     }
 
