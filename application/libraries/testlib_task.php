@@ -53,14 +53,17 @@ class TestLib_Task extends Task {
         $workdir = $this->workdir;
         chdir($workdir);
 
-        $f = fopen('prog.in', 'w');
+        $f = fopen('prog.ans', 'w');
         fwrite($f, $stdin);
         fclose($f);
 
-        $output = array();
-        $returnVal = 0;
-        exec('sh -c ' . escapeshellarg($wrappedCmd . ' prog.in prog.in prog.in'), $output, $returnVal);
+        touch('prog.in');
+        touch('prog.out');
 
-        return array($returnVal . '|' . implode(' ', $output), '');
+        $output = null;
+        $returnVal = 0;
+        exec('sh -c ' . escapeshellarg($wrappedCmd . ' prog.in prog.out prog.ans prog.res'), $output, $returnVal);
+
+        return array($returnVal . '|' . file_get_contents('prog.res'), '');
     }
 };
