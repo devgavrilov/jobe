@@ -1,0 +1,15 @@
+name: CI
+
+on: [push]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v1
+    - name: Replace jobe
+      uses: contention/rsync-deployments@v1.0.0
+      env:
+        DEPLOY_KEY: ${{ secrets.DEV_DEPLOY_KEY }}
+      with:
+        args: "-avzrc --exclude=.git --delete ${{ secrets.DEV_USERNAME }}@${{ secrets.DEV_HOST }}:/var/www/jobe"
