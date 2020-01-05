@@ -2,7 +2,7 @@
 
 /* ==============================================================
  *
- * C++
+ * TestLib (Based on C++)
  *
  * ==============================================================
  *
@@ -12,7 +12,7 @@
 
 require_once('application/libraries/LanguageTask.php');
 
-class TestLibTask extends Task {
+class TestLib_Task extends Task {
 
     public function __construct($filename, $input, $params) {
         parent::__construct($filename, $input, $params);
