@@ -8,8 +8,10 @@ jobs:
     steps:
     - uses: actions/checkout@v1
     - name: Replace jobe
-      uses: contention/rsync-deployments@v1.0.0
-      env:
-        DEPLOY_KEY: ${{ secrets.DEV_DEPLOY_KEY }}
-      with:
-        args: "-avzrc --exclude=.git --delete ${{ secrets.DEV_USERNAME }}@${{ secrets.DEV_HOST }}:/var/www/jobe"
+      uses: Pendect/action-rsyncer@v1.1.0
+        env:
+          DEPLOY_KEY: ${{ secrets.DEV_DEPLOY_KEY }}
+        with:
+          options: '--exclude=.git'
+          src: '.'
+          dist: '${{ secrets.DEV_USERNAME }}@${{ secrets.DEV_HOST }}:/var/www/jobe'
