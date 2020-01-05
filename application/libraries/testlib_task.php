@@ -59,7 +59,7 @@ class TestLibTask extends Task {
 
         $output = null;
         $returnVal = 0;
-        exec('sh -c ' . escapeshellarg($wrappedCmd . ' prog.in prog.in prog.in'), &$output, &$returnVal);
+        exec('sh -c ' . escapeshellarg($wrappedCmd . ' prog.in prog.in prog.in'), $output, $returnVal);
 
         return array($returnVal, '');
     }
