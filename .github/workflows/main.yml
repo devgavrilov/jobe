@@ -14,4 +14,4 @@ jobs:
       with:
         options: '--exclude=.git'
         src: '.'
-        dist: '${{ secrets.DEV_USERNAME }}@${{ secrets.DEV_HOST }}:/var/www/jobe/'
+        dist: 'root@68.183.243.27:/var/www/jobe/'
