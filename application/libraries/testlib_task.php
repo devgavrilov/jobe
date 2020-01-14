@@ -53,9 +53,8 @@ class TestLib_Task extends Task {
         $workdir = $this->workdir;
         chdir($workdir);
 
-        $f = fopen('prog.ans', 'w');
-        fwrite($f, $stdin);
-        fclose($f);
+        // Input
+        file_put_contents('prog.ans', $stdin);
 
         touch('prog.in');
         touch('prog.out');
