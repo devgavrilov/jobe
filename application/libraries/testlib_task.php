@@ -28,10 +28,21 @@ class TestLib_Task extends Task {
     public function compile() {
         $src = basename($this->sourceFileName);
         $this->executableFileName = $execFileName = "$src.exe";
-        $compileargs = $this->getParam('compileargs');
-        $linkargs = $this->getParam('linkargs');
-        $cmd = "g++ " . implode(' ', $compileargs) . " -x c++ -o $execFileName $src " . implode(' ', $linkargs);
-        list($output, $this->cmpinfo) = parent::run_in_sandbox($cmd);
+        
+        $cacheKey = md5(file_get_contents($this->sourceFileName));
+        if (!FileCache::file_exists($cacheKey)) {
+            $compileargs = $this->getParam('compileargs');
+            $linkargs = $this->getParam('linkargs');
+            $cmd = "g++ " . implode(' ', $compileargs) . " -x c++ -o $execFileName $src " . implode(' ', $linkargs);
+            list($output, $this->cmpinfo) = parent::run_in_sandbox($cmd);
+
+            FileCache::file_put_contents($cacheKey, file_get_contents($this->executableFileName));
+        } else {
+            file_put_contents($this->executableFileName, FileCache::file_get_contents($cacheKey));
+
+            exec('sudo chmod +x ' . $this->executableFileName);
+            exec('sudo chown ' . $this->user . ':jobe ' . $this->executableFileName);
+        }
     }
 
     // A default name for C++ programs
