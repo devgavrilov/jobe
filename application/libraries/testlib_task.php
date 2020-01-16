@@ -29,7 +29,7 @@ class TestLib_Task extends Task {
         $src = basename($this->sourceFileName);
         $this->executableFileName = $execFileName = "$src.exe";
         
-        $cacheKey = md5(file_get_contents($this->sourceFileName));
+        $cacheKey = md5(file_get_contents($this->sourceFileName) . '-compiled');
         if (!FileCache::file_exists($cacheKey)) {
             $compileargs = $this->getParam('compileargs');
             $linkargs = $this->getParam('linkargs');
@@ -64,16 +64,16 @@ class TestLib_Task extends Task {
         $workdir = $this->workdir;
         chdir($workdir);
 
-        // Input
-        file_put_contents('prog.ans', $stdin);
+        $data = json_decode($stdin);
 
-        touch('prog.in');
-        touch('prog.out');
+        file_put_contents('prog.in', $data->input);
+        file_put_contents('prog.out', $data->output);
+        file_put_contents('prog.ans', $data->answer);
 
         $output = null;
         $returnVal = 0;
         exec('sh -c ' . escapeshellarg($wrappedCmd . ' prog.in prog.out prog.ans prog.res'), $output, $returnVal);
 
-        return array($returnVal . '|' . file_get_contents('prog.res'), '');
+        return array(json_encode(array('code' => $returnVal, 'message' => file_get_contents('prog.res'))), '');
     }
 };
