@@ -12,6 +12,7 @@
  */
 
 require_once('application/libraries/resultobject.php');
+require_once('application/Sandbox/Sandbox.php');
 
 define('ACTIVE_USERS', 1);  // The key for the shared memory active users array
 define('MAX_RETRIES', 8);   // Maximum retries (1 secs per retry), waiting for free user account
@@ -272,53 +273,22 @@ abstract class Task {
      * from running the given command.
      */
     public function run_in_sandbox($wrappedCmd, $iscompile=true, $stdin=null) {
-        $filesize = 1000 * $this->getParam('disklimit', $iscompile); // MB -> kB
-        $streamsize = 1000 * $this->getParam('streamsize', $iscompile); // MB -> kB
-        $memsize = 1000 * $this->getParam('memorylimit', $iscompile);
-        $cputime = $this->getParam('cputime', $iscompile);
-        $killtime = 2 * $cputime; // Kill the job after twice the allowed cpu time
-        $numProcs = $this->getParam('numprocs', $iscompile) + 1; // The + 1 allows for the sh command below.
-        $sandboxCommandBits = array(
-                "sudo " . dirname(__FILE__)  . "/../../runguard/runguard",
-                "--user={$this->user}",
-                "--group=jobe",
-                "--cputime=$cputime",      // Seconds of execution time allowed
-                "--time=$killtime",        // Wall clock kill time
-                "--filesize=$filesize",    // Max file sizes
-                "--nproc=$numProcs",       // Max num processes/threads for this *user*
-                "--no-core",
-                "--streamsize=$streamsize");   // Max stdout/stderr sizes
+        $runLimits = new RunLimits();
+        $runLimits->diskLimit = $this->getParam('disklimit', $iscompile);
+        $runLimits->streamSize = $this->getParam('streamsize', $iscompile);
+        $runLimits->memoryLimit = $this->getParam('memorylimit', $iscompile);
+        $runLimits->cpuTime = $this->getParam('cputime', $iscompile);
+        $runLimits->numProcs = $this->getParam('numprocs', $iscompile);
 
-        if ($memsize != 0) {  // Special case: Matlab won't run with a memsize set. TODO: WHY NOT!
-            $sandboxCommandBits[] = "--memsize=$memsize";
-        }
-        $sandboxCmd = implode(' ', $sandboxCommandBits) .
-                ' sh -c ' . escapeshellarg($wrappedCmd) . ' >prog.out 2>prog.err';
+        $runOptions = new RunOptions();
+        $runOptions->limits = $runLimits;
+        $runOptions->user = $this->user;
+        $runOptions->group = 'jobe';
+        $runOptions->workingDirectory = $this->workdir;
+        $runOptions->input = $stdin;
 
-        // CD into the work directory and run the job
-        $workdir = $this->workdir;
-        chdir($workdir);
-
-        if ($stdin) {
-            $f = fopen('prog.in', 'w');
-            fwrite($f, $stdin);
-            fclose($f);
-            $sandboxCmd .= " <prog.in\n";
-        }
-        else {
-            $sandboxCmd .= " </dev/null\n";
-        }
-
-        file_put_contents('prog.cmd', $sandboxCmd);
-        exec('bash prog.cmd');
-
-        $output = file_get_contents("$workdir/prog.out");
-        if (file_exists("{$this->workdir}/prog.err")) {
-            $stderr = file_get_contents("{$this->workdir}/prog.err");
-        } else {
-            $stderr = '';
-        }
-        return array($output, $stderr);
+        $result = Sandbox::run($wrappedCmd, $runOptions);
+        return array($result->output, $result->error);
     }
 
 
