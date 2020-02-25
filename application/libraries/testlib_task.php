@@ -10,7 +10,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once('application/libraries/LanguageTask.php');
+require_once('application/libraries/Task.php');
 
 class TestLib_Task extends Task {
 
@@ -28,7 +28,7 @@ class TestLib_Task extends Task {
     public function compile() {
         $src = basename($this->sourceFileName);
         $this->executableFileName = $execFileName = "$src.exe";
-        
+
         $cacheKey = md5(file_get_contents($this->sourceFileName) . '-compiled');
         if (!FileCache::file_exists($cacheKey)) {
             $compileargs = $this->getParam('compileargs');

@@ -10,7 +10,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once('application/libraries/LanguageTask.php');
+require_once('application/libraries/Task.php');
 
 
 class Python2_Task extends Task {

@@ -6,7 +6,7 @@
 // web root.
 
 define('ACTIVE_USERS', 1);  // The key for the shared memory active users array
-$key = ftok('/var/www/html/jobe/application/libraries/LanguageTask.php', 'j');
+$key = ftok('/var/www/html/jobe/application/libraries/Task.php', 'j');
 $sem = sem_get($key);
 sem_acquire($sem);
 $shm = shm_attach($key);

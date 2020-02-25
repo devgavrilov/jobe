@@ -21,7 +21,7 @@
 if ( ! defined('BASEPATH')) exit('No direct script access allowed');
 
 require_once('application/libraries/REST_Controller.php');
-require_once('application/libraries/LanguageTask.php');
+require_once('application/libraries/Task.php');
 require_once('application/libraries/JobException.php');
 require_once('application/libraries/resultobject.php');
 require_once('application/libraries/filecache.php');

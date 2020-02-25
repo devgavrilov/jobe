@@ -13,6 +13,7 @@
 
 require_once('application/libraries/resultobject.php');
 require_once('application/Sandbox/Sandbox.php');
+require_once('application/Users/Users.php');
 
 define('ACTIVE_USERS', 1);  // The key for the shared memory active users array
 define('MAX_RETRIES', 8);   // Maximum retries (1 secs per retry), waiting for free user account
@@ -33,8 +34,6 @@ abstract class Task {
     const RESULT_ILLEGAL_SYSCALL = 19;
     const RESULT_INTERNAL_ERR = 20;
     const RESULT_SERVER_OVERLOAD = 21;
-
-    const PROJECT_KEY = 'j';  // For ftok function. Irrelevant (?)
 
     // Global default parameter values. Can be overridden by subclasses,
     // and then further overridden by the individual run requests.
@@ -123,7 +122,7 @@ abstract class Task {
         file_put_contents($this->workdir . '/' . $this->sourceFileName, $sourceCode);
 
         // Allocate one of the Jobe users.
-        $this->userId = $this->getFreeUser();
+        $this->userId = Users::acquire();
         $this->user = sprintf("jobe%02d", $this->userId);
 
         // Give the user RW access.
@@ -179,7 +178,7 @@ abstract class Task {
         if ($this->userId !== null) {
             exec("sudo /usr/bin/pkill -9 -u {$this->user}"); // Kill any remaining processes
             $this->removeTemporaryFiles($this->user);
-            $this->freeUser($this->userId);
+            Users::free($this->userId);
             $this->userId = null;
             $this->user = null;
         }
@@ -189,73 +188,6 @@ abstract class Task {
             exec("sudo rm -R $dir");
             $this->workdir = null;
         }
-    }
-
-    // ************************************************
-    //    METHODS TO ALLOCATE AND FREE ONE JOBE USER
-    // ************************************************
-
-    // Find a currently unused jobe user account.
-    // Uses a shared memory segment containing one byte (used as a 'busy'
-    // boolean) for each of the possible user accounts.
-    // If no free accounts exist at present, the function sleeps for a
-    // second then retries, up to a maximum of MAX_RETRIES retries.
-    // Throws OverloadException if a free user cannot be found, otherwise
-    // returns an integer in the range 0 to jobe_max_users - 1 inclusive.
-    private function getFreeUser() {
-        global $CI;
-
-        $numUsers = $CI->config->item('jobe_max_users');
-        $key = ftok(__FILE__,  TASK::PROJECT_KEY);
-        $sem = sem_get($key);
-        $user = -1;
-        $retries = 0;
-        while ($user == -1) {  // Loop until we have a user (or an OverloadException is thrown)
-            sem_acquire($sem);
-            $shm = shm_attach($key);
-            if (!shm_has_var($shm, ACTIVE_USERS)) {
-                // First time since boot -- initialise active list
-                $active = array();
-                for($i = 0; $i < $numUsers; $i++) {
-                    $active[$i] = FALSE;
-                }
-                shm_put_var($shm, ACTIVE_USERS, $active);
-            }
-            $active = shm_get_var($shm, ACTIVE_USERS);
-            for ($user = 0; $user < $numUsers; $user++) {
-                if (!$active[$user]) {
-                    $active[$user] = TRUE;
-                    shm_put_var($shm, ACTIVE_USERS, $active);
-                    break;
-                }
-            }
-            shm_detach($shm);
-            sem_release($sem);
-            if ($user == $numUsers) {
-                $user = -1;
-                $retries += 1;
-                if ($retries <= MAX_RETRIES) {
-                    sleep(1);
-                } else {
-                    throw new OverloadException();
-                }
-            }
-        }
-        return $user;
-    }
-
-
-    // Mark the given user number (0 to jobe_max_users - 1) as free.
-    private function freeUser($userNum) {
-        $key = ftok(__FILE__, 'j');
-        $sem = sem_get($key);
-        sem_acquire($sem);
-        $shm = shm_attach($key);
-        $active = shm_get_var($shm, ACTIVE_USERS);
-        $active[$userNum] = FALSE;
-        shm_put_var($shm, ACTIVE_USERS, $active);
-        shm_detach($shm);
-        sem_release($sem);
     }
 
     // ************************************************
@@ -274,10 +206,10 @@ abstract class Task {
      */
     public function run_in_sandbox($wrappedCmd, $iscompile=true, $stdin=null) {
         $runLimits = new RunLimits();
-        $runLimits->diskLimit = $this->getParam('disklimit', $iscompile);
-        $runLimits->streamSize = $this->getParam('streamsize', $iscompile);
-        $runLimits->memoryLimit = $this->getParam('memorylimit', $iscompile);
-        $runLimits->cpuTime = $this->getParam('cputime', $iscompile);
+        $runLimits->diskLimit = $this->getParam('disklimit');
+        $runLimits->streamSize = $this->getParam('streamsize');
+        $runLimits->memoryLimit = $this->getParam('memorylimit');
+        $runLimits->cpuTime = $this->getParam('cputime');
         $runLimits->numProcs = $this->getParam('numprocs', $iscompile);
 
         $runOptions = new RunOptions();
@@ -300,7 +232,7 @@ abstract class Task {
      * in $min_params_compile (except if it's 0 meaning no limit), the minimum
      * value is used instead.
      */
-    protected function getParam($key, $iscompile=false) {
+    protected function getParam($key) {
         if (isset($this->params) && array_key_exists($key, $this->params)) {
             $param = $this->params[$key];
         } else {
@@ -314,25 +246,6 @@ abstract class Task {
             $param = $this->min_params_compile[$key];
         }
         return $param;
-    }
-
-
-    // Check if PHP exec environment includes a PATH. If not, set up a
-    // default, or gcc misbehaves. [Thanks to Binoj D for this bug fix,
-    // needed on his CentOS system.]
-    protected function setPath() {
-        $envVars = array();
-        exec('printenv', $envVars);
-        $hasPath = FALSE;
-        foreach ($envVars as $var) {
-            if (strpos($var, 'PATH=') === 0) {
-                $hasPath = TRUE;
-                break;
-            }
-        }
-        if (!$hasPath) {
-            putenv("PATH=/sbin:/bin:/usr/sbin:/usr/bin");
-        }
     }
 
 

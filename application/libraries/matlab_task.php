@@ -10,7 +10,7 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once('application/libraries/LanguageTask.php');
+require_once('application/libraries/Task.php');
 
 class Matlab_Task extends Task {
     public function __construct($filename, $input, $params) {
@@ -102,6 +102,24 @@ class Matlab_Task extends Task {
     // The target file is the matlab file without its extension
     public function getTargetFile() {
         return $this->executableFileName;
+    }
+
+    // Check if PHP exec environment includes a PATH. If not, set up a
+    // default, or gcc misbehaves. [Thanks to Binoj D for this bug fix,
+    // needed on his CentOS system.]
+    protected function setPath() {
+        $envVars = array();
+        exec('printenv', $envVars);
+        $hasPath = FALSE;
+        foreach ($envVars as $var) {
+            if (strpos($var, 'PATH=') === 0) {
+                $hasPath = TRUE;
+                break;
+            }
+        }
+        if (!$hasPath) {
+            putenv("PATH=/sbin:/bin:/usr/sbin:/usr/bin");
+        }
     }
 };
 

@@ -371,7 +371,7 @@ If the install appears OK but testsubmit.py fails:
  1. If you are getting Overloaded errors, then you can display the in-memory
     locks on the Jobe users with this PHP one-liner:
     ```php -r 'print_r(shm_get_var(shm_attach(ftok
-      ("/var/www/html/jobe/application/libraries/LanguageTask.php", "j")), 1));'
+      ("/var/www/html/jobe/application/libraries/Task.php", "j")), 1));'
 
 If you still can't figure it out, email me (Richard Lobb; my gmail name is
 trampgeek).
@@ -613,7 +613,7 @@ If you wish to change the existing default options within Jobe, or you wish to
 add new languages, you must edit the source code as follows.
 
 The folder *application/libraries* contains all the code that executes
-submitted jobs. The file *LanguageTask.php* defines an abstract class
+submitted jobs. The file *Task.php* defines an abstract class
 *Task* that contains default configuration parameters for things like
 memory limit, maximum cpu run time, maximum disk output, etc. For each
 supported language, a subclass with a name of the form *&lt;Language&gt;_Task*
