@@ -44,7 +44,6 @@ class Java_Task extends Task {
     }
 
     public function compile() {
-        $prog = file_get_contents($this->sourceFileName);
         $compileArgs = $this->getParam('compileargs');
         $cmd = '/usr/bin/javac ' . implode(' ', $compileArgs) . " {$this->sourceFileName}";
         list($output, $this->cmpinfo) = $this->run_in_sandbox($cmd);

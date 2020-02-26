@@ -14,8 +14,8 @@ class Sandbox {
 
         $sandboxCommandBits = array(
                 "sudo " . dirname(__FILE__)  . "/../../runguard/runguard",
-                "--user={$runOptions->user}",
-                "--group={$runOptions->group}",
+                "--user={$runOptions->user->name}",
+                "--group={$runOptions->user->group}",
                 "--cputime=$cpuTime",      // Seconds of execution time allowed
                 "--time=$killTime",        // Wall clock kill time
                 "--filesize=$diskLimit",   // Max file sizes
@@ -31,7 +31,7 @@ class Sandbox {
                 ' sh -c ' . escapeshellarg($command) . ' >prog.out 2>prog.err';
 
         // CD into the work directory and run the job
-        chdir($runOptions->workingDirectory);
+        chdir($runOptions->user->workingDirectory);
 
         if ($runOptions->input) {
             file_put_contents('prog.in', $runOptions->input);

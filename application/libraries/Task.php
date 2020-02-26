@@ -11,9 +11,9 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once('application/libraries/resultobject.php');
+require_once('application/libraries/ResultObject.php');
 require_once('application/Sandbox/Sandbox.php');
-require_once('application/Users/Users.php');
+require_once('application/Sandbox/SandboxUser.php');
 
 define('ACTIVE_USERS', 1);  // The key for the shared memory active users array
 define('MAX_RETRIES', 8);   // Maximum retries (1 secs per retry), waiting for free user account
@@ -105,25 +105,21 @@ abstract class Task {
     // any of the jobe<n> users, running programs will be able
     // to hoover up other students' submissions.
     public function prepare_execution_environment($sourceCode) {
-        // Create the temporary directory that will be used.
-        $this->workdir = tempnam("/home/jobe/runs", "jobe_");
-        if (!unlink($this->workdir) || !mkdir($this->workdir)) {
-            log_message('error', 'LanguageTask constructor: error making temp directory');
-            throw new Exception("Task: error making temp directory (race error?)");
-        }
-        chdir($this->workdir);
+        // Allocate one of the Jobe users.
+        $this->userObj = new SandboxUser();
+        $this->userId = $this->userObj->id;
+        $this->user = $this->userObj->name;
 
-        $this->id = basename($this->workdir);
+        $this->id = basename($this->userObj->workingDirectory);
+        $this->workdir = $this->userObj->workingDirectory;
+
+        chdir($this->workdir);
 
         // Save the source there.
         if (empty($this->sourceFileName)) {
             $this->sourceFileName = $this->defaultFileName($sourceCode);
         }
         file_put_contents($this->workdir . '/' . $this->sourceFileName, $sourceCode);
-
-        // Allocate one of the Jobe users.
-        $this->userId = Users::acquire();
-        $this->user = sprintf("jobe%02d", $this->userId);
 
         // Give the user RW access.
         exec("setfacl -m u:{$this->user}:rwX {$this->workdir}");
@@ -174,13 +170,9 @@ abstract class Task {
 
     // Called to clean up task when done
     public function close($deleteFiles = true) {
-
         if ($this->userId !== null) {
             exec("sudo /usr/bin/pkill -9 -u {$this->user}"); // Kill any remaining processes
             $this->removeTemporaryFiles($this->user);
-            Users::free($this->userId);
-            $this->userId = null;
-            $this->user = null;
         }
 
         if ($deleteFiles && $this->workdir) {
@@ -214,9 +206,7 @@ abstract class Task {
 
         $runOptions = new RunOptions();
         $runOptions->limits = $runLimits;
-        $runOptions->user = $this->user;
-        $runOptions->group = 'jobe';
-        $runOptions->workingDirectory = $this->workdir;
+        $runOptions->user = $this->userObj;
         $runOptions->input = $stdin;
 
         $result = Sandbox::run($wrappedCmd, $runOptions);

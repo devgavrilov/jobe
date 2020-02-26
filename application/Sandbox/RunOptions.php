@@ -5,8 +5,6 @@ require_once('application/Sandbox/RunLimits.php');
 class RunOptions {
     public $limits;
     public $user;
-    public $group;
-    public $workingDirectory;
     public $input;
 
     public function __constructor() {
