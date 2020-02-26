@@ -23,7 +23,6 @@ class SandboxUser {
     }
 
     private function createWorkingDirectory() {
-        // Create the temporary directory that will be used.
         $workingDirectory = tempnam("/home/jobe/runs", "jobe_");
         if (!unlink($workingDirectory) || !mkdir($workingDirectory)) {
             log_message('error', 'LanguageTask constructor: error making temp directory');
@@ -77,11 +76,27 @@ class SandboxUser {
     public function __destruct()
     {
         $this->cleanWorkingDirectory();
+        $this->cleanAllUserFiles();
+        $this->killRemainingProcesses();
         $this->freeUser();
     }
 
     private function cleanWorkingDirectory() {
         exec("sudo rm -R {$this->workingDirectory}");
+    }
+
+    private function cleanAllUserFiles() {
+        global $CI;
+
+        $path = $CI->config->item('clean_up_path');
+        $dirs = explode(';', $path);
+        foreach($dirs as $dir) {
+            exec("sudo /usr/bin/find $dir/ -user {$this->name} -delete");
+        }
+    }
+
+    private function killRemainingProcesses() {
+        exec("sudo /usr/bin/pkill -9 -u {$this->name}");
     }
 
     private function freeUser() {

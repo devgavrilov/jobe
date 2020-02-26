@@ -199,25 +199,17 @@ class Restapi extends REST_Controller {
         $debug = $this->config->item('debugging') ||
                 (isset($run->debug) && $run->debug);
 
-        // The nested tries here are a bit ugly, but the point is that we want to
-        // to clean up the task with close() before handling the exception.
         try {
-            try {
-                $this->task->prepare_execution_environment($run->sourcecode);
+            $this->task->prepare_execution_environment($run->sourcecode);
 
-                $this->task->load_files($files);
+            $this->task->load_files($files);
 
-                $this->log('debug', "runs_post: compiling job {$this->task->id}");
-                $this->task->compile();
+            $this->log('debug', "runs_post: compiling job {$this->task->id}");
+            $this->task->compile();
 
-                if (empty($this->task->cmpinfo)) {
-                    $this->log('debug', "runs_post: executing job {$this->task->id}");
-                    $this->task->execute();
-                }
-
-            } finally {
-                // Delete task run directory unless it's a debug run
-                $this->task->close(!$debug);
+            if (empty($this->task->cmpinfo)) {
+                $this->log('debug', "runs_post: executing job {$this->task->id}");
+                $this->task->execute();
             }
 
             // Success!

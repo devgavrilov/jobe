@@ -51,4 +51,4 @@ class C_Task extends Task {
     public function getTargetFile() {
         return '';
     }
-};
+}

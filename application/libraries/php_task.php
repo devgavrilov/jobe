@@ -24,8 +24,6 @@ class Php_Task extends Task {
     }
 
     public function compile() {
-        $outputLines = array();
-        $returnVar = 0;
         list($output, $compileErrs) = $this->run_in_sandbox("/usr/bin/php -l {$this->sourceFileName}");
         if (empty($compileErrs)) {
             $this->cmpinfo = '';

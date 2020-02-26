@@ -168,20 +168,6 @@ abstract class Task {
     }
 
 
-    // Called to clean up task when done
-    public function close($deleteFiles = true) {
-        if ($this->userId !== null) {
-            exec("sudo /usr/bin/pkill -9 -u {$this->user}"); // Kill any remaining processes
-            $this->removeTemporaryFiles($this->user);
-        }
-
-        if ($deleteFiles && $this->workdir) {
-            $dir = $this->workdir;
-            exec("sudo rm -R $dir");
-            $this->workdir = null;
-        }
-    }
-
     // ************************************************
     //                  HELPER METHODS
     // ************************************************
@@ -337,18 +323,6 @@ abstract class Task {
                 $this->filteredStdout(),
                 $this->filteredStderr()
         );
-    }
-
-
-    // Remove any temporary files created by the given user on completion
-    // of a run
-    protected function removeTemporaryFiles($user) {
-        global $CI;
-        $path = $CI->config->item('clean_up_path');
-        $dirs = explode(';', $path);
-        foreach($dirs as $dir) {
-            exec("sudo /usr/bin/find $dir/ -user $user -delete");
-        }
     }
 
     // ************************************************
