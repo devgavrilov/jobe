@@ -10,45 +10,42 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once('application/libraries/Task.php');
+require_once 'application/Sandbox/RunOptions.php';
+require_once 'application/libraries/ExecutionResult.php';
+require_once('application/libraries/CachedCompiledExecutor.php');
+require_once('application/libraries/Versions/CommandLineRegexpVersionProvider.php');
 
-class C_Task extends Task {
-
-    public function __construct($filename, $input, $params) {
-        parent::__construct($filename, $input, $params);
-        $this->default_params['compileargs'] = array(
-            '-Wall',
-            '-Werror',
-            '-std=c99',
-            '-x c');
-    }
-
-    public static function getVersionCommand() {
-        return array('gcc --version', '/gcc \(.*\) ([0-9.]*)/');
-    }
-
-    public function compile() {
-        $src = basename($this->sourceFileName);
-        $this->executableFileName = $execFileName = "$src.exe";
-        $compileargs = $this->getParam('compileargs');
-        $linkargs = $this->getParam('linkargs');
-        $cmd = "gcc " . implode(' ', $compileargs) . " -o $execFileName $src " . implode(' ', $linkargs);
-        list($output, $this->cmpinfo) = $this->run_in_sandbox($cmd);
-    }
-
-    // A default name for C programs
-    public function defaultFileName($sourcecode) {
+class C_Task extends CachedCompiledExecutor
+{
+    protected function getSourceFileName(): string
+    {
         return 'prog.c';
     }
 
-
-    // The executable is the output from the compilation
-    public function getExecutablePath() {
-        return "./" . $this->executableFileName;
+    protected function getCompiledFileName(): string
+    {
+        return "program.exe";
     }
 
+    public function compile()
+    {
+        $result = $this->sandbox->run("gcc -Wall -Werror -std=c99 -x c -o " . $this->getCompiledFileName() . " " . $this->getSourceFileName(), new RunOptions());
+        if ($result->isErrorHappened()) {
+            throw new CompilationErrorException($result->output, $result->error, $result->exitCode);
+        }
+    }
 
-    public function getTargetFile() {
-        return '';
+    protected function run(): ExecutionResult
+    {
+        $options = new RunOptions();
+        $options->input = $this->task->input;
+
+        $result = $this->sandbox->run("./" . $this->getCompiledFileName(), $options);
+        return new ExecutionResult($result->output);
+    }
+
+    public static function getVersion(): VersionProvider
+    {
+        return new CommandLineRegexpVersionProvider('gcc --version', '/gcc \(.*\) ([0-9.]*)/');
     }
 }

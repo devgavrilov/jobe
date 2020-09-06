@@ -4,10 +4,10 @@ require_once('application/Sandbox/RunLimits.php');
 
 class RunOptions {
     public $limits;
-    public $user;
-    public $input;
+    public $input = null;
 
-    public function __constructor() {
+    public function __construct()
+    {
         $this->limits = new RunLimits();
     }
 }

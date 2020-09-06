@@ -10,41 +10,39 @@
  * @license    http://www.gnu.org/copyleft/gpl.html GNU GPL v3 or later
  */
 
-require_once('application/libraries/Task.php');
+require_once 'application/Sandbox/RunOptions.php';
+require_once 'application/libraries/InterpretedExecutor.php';
+require_once 'application/libraries/ExecutionResult.php';
+require_once 'application/libraries/Exceptions/LinterErrorException.php';
+require_once 'application/libraries/Versions/CommandLineRegexpVersionProvider.php';
 
-class Python3_Task extends Task {
-    public function __construct($filename, $input, $params) {
-        parent::__construct($filename, $input, $params);
-        $this->default_params['memorylimit'] = 400; // Need more for numpy
-        $this->default_params['interpreterargs'] = array('-BE');
-    }
-
-    public static function getVersionCommand() {
-        return array('python3 --version', '/Python ([0-9._]*)/');
-    }
-
-    public function compile() {
-        $cmd = "python3 -m py_compile {$this->sourceFileName}";
-        $this->executableFileName = $this->sourceFileName;
-        list($output, $this->cmpinfo) = $this->run_in_sandbox($cmd);
-        if (!empty($this->cmpinfo) && !empty($output)) {
-            $this->cmpinfo = $output . '\n' . $this->cmpinfo;
-        }
-    }
-
-
-    // A default name for Python3 programs
-    public function defaultFileName($sourcecode) {
+class Python3_Task extends InterpretedExecutor
+{
+    protected function getSourceFileName(): string
+    {
         return 'prog.py';
     }
 
+    protected function lint()
+    {
+        $result = $this->sandbox->run("python3 -m py_compile {$this->getSourceFileName()}", new RunOptions());
+        if ($result->isErrorHappened()) {
+            throw new LinterErrorException();
+        }
+    }
 
-    public function getExecutablePath() {
-        return '/usr/bin/python3';
-     }
+    protected function run(): ExecutionResult
+    {
+        $options = new RunOptions();
+        $options->input = $this->task->input;
+        $options->limits->memoryLimit = 400;
 
+        $result = $this->sandbox->run('/usr/bin/python3 -BE ' . $this->getSourceFileName(), $options);
+        return new ExecutionResult($result->output);
+    }
 
-     public function getTargetFile() {
-         return $this->sourceFileName;
-     }
-};
+    public static function getVersion(): VersionProvider
+    {
+        return new CommandLineRegexpVersionProvider('python3 --version', '/Python ([0-9._]*)/');
+    }
+}

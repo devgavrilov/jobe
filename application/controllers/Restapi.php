@@ -18,17 +18,28 @@
  */
 
 require_once('application/libraries/REST_Controller.php');
-require_once('application/libraries/Task.php');
-require_once('application/libraries/Languages.php');
-require_once('application/libraries/JobException.php');
-require_once('application/libraries/ResultObject.php');
+require_once('application/libraries/Executor.php');
+require_once('application/libraries/Executors.php');
+require_once('application/libraries/Exceptions/JobException.php');
+require_once 'application/libraries/Exceptions/CompilationErrorException.php';
+require_once('application/libraries/Result.php');
+require_once('application/libraries/ExecutionTask.php');
 require_once('application/libraries/filecache.php');
 
 define('MAX_READ', 4096);  // Max bytes to read in popen
 define('MIN_FILE_IDENTIFIER_SIZE', 8);
 
+const RESULT_COMPILATION_ERROR = 11;
+const RESULT_RUNTIME_ERROR = 12;
+const RESULT_TIME_LIMIT   = 13;
+const RESULT_SUCCESS      = 15;
+const RESULT_MEMORY_LIMIT    = 17;
+const RESULT_ILLEGAL_SYSCALL = 19;
+const RESULT_INTERNAL_ERR = 20;
+const RESULT_SERVER_OVERLOAD = 21;
 
-class Restapi extends REST_Controller {
+class Restapi extends REST_Controller
+{
 
     protected $languages = array();
 
@@ -43,31 +54,33 @@ class Restapi extends REST_Controller {
         header("Access-Control-Allow-Headers: X-API-KEY, Origin, X-Requested-With, Content-Type, Accept, Access-Control-Request-Method");
         header("Access-Control-Allow-Methods: GET, POST, OPTIONS, PUT, HEAD, DELETE");
         $method = $_SERVER['REQUEST_METHOD'];
-        if($method == "OPTIONS") {
+        if ($method == "OPTIONS") {
             die();
         }
         parent::__construct();
 
-        $this->languages = Languages::getList();
+        $this->languages = Executors::getList();
 
         if ($this->config->item('rest_enable_limits')) {
             $this->load->config('per_method_limits');
             $limits = $this->config->item('per_method_limits');
-            foreach ($limits as $method=>$limit) {
+            foreach ($limits as $method => $limit) {
                 $this->methods[$method]['limit'] = $limit;
             }
         }
     }
 
 
-    protected function log($type, $message) {
+    protected function log($type, $message)
+    {
         // Call log_message with the same parameters, but prefix the message
         // by *jobe* for easy identification.
         log_message($type, '*jobe* ' . $message);
     }
 
 
-    protected function error($message, $httpCode=400) {
+    protected function error($message, $httpCode = 400)
+    {
         // Generate the http response containing the given message with the given
         // HTTP response code. Log the error first.
         $this->log('error', $message);
@@ -75,7 +88,8 @@ class Restapi extends REST_Controller {
     }
 
 
-    public function index_get() {
+    public function index_get()
+    {
         $this->response('Please access this API via the runs, runresults, files or languages collections', 404);
     }
 
@@ -84,7 +98,8 @@ class Restapi extends REST_Controller {
     // ****************************
 
     // Put (i.e. create or update) a file
-    public function files_put($fileId=FALSE) {
+    public function files_put($fileId = FALSE)
+    {
         if ($fileId === FALSE) {
             $this->error('No file id in URL');
         }
@@ -108,7 +123,8 @@ class Restapi extends REST_Controller {
 
 
     // Check file
-    public function files_head($fileId) {
+    public function files_head($fileId)
+    {
         if (!$fileId) {
             $this->error('head: missing file ID parameter in URL');
         } else if (FileCache::file_exists($fileId)) {
@@ -121,7 +137,8 @@ class Restapi extends REST_Controller {
     }
 
     // Post file
-    public function files_post() {
+    public function files_post()
+    {
         $this->error('file_post: not implemented on this server', 403);
     }
 
@@ -129,12 +146,14 @@ class Restapi extends REST_Controller {
     //        RUNS
     // ****************************
 
-    public function runs_get() {
+    public function runs_get()
+    {
         $this->error('runs_get: no such run or run result discarded', 200);
     }
 
 
-    public function runs_post() {
+    public function runs_post()
+    {
         global $CI;
 
         // Note to help understand this method: the ->error and ->response methods
@@ -144,15 +163,14 @@ class Restapi extends REST_Controller {
         if (!$run = $this->post('run_spec', false)) {
             $this->error('runs_post: missing or invalid run_spec parameter', 400);
         }
-        if (!is_array($run) || !isset($run['sourcecode']) ||
-                !isset($run['language_id'])
+        if (!is_array($run) || !isset($run['sourcecode']) || !isset($run['language_id'])
         ) {
             $this->error('runs_post: invalid run specification', 400);
         }
 
         // REST_Controller has called to_array on the JSON decoded
         // object, so we must first turn it back into an object.
-        $run = (object) $run;
+        $run = (object)$run;
 
         // If there are files, check them.
         if (isset($run->file_list)) {
@@ -181,51 +199,45 @@ class Restapi extends REST_Controller {
         // Get the parameters, and validate.
         $params = isset($run->parameters) ? $run->parameters : array();
         if (isset($params['cputime']) &&
-                intval($params['cputime']) > intval($CI->config->item('cputime_upper_limit_secs'))
+            intval($params['cputime']) > intval($CI->config->item('cputime_upper_limit_secs'))
         ) {
             $this->response("cputime exceeds maximum allowed on this Jobe server", 400);
         }
 
-        // Create the task.
-        $this->task = Languages::get($run->language_id, $run->sourcefilename, $input, $params);
-        if ($this->task == null) {
-            $this->response("Language '$run->language_id' is not known", 400);
-        }
+        $task = new ExecutionTask();
+        $task->sourceCode = $run->sourcecode;
+        $task->sourceFileName = $run->sourcefilename;
+        $task->files = $files;
+        $task->input = $input;
+        $task->debug = false;
 
         // Debugging is set either via a config parameter or, for a
         // specific run, by the run's debug attribute.
         // When debugging, the task run directory and its contents
         // are not deleted after the run.
-        $debug = $this->config->item('debugging') ||
-                (isset($run->debug) && $run->debug);
+        $task->debug = $this->config->item('debugging') || (isset($run->debug) && $run->debug);
 
         try {
-            $this->task->prepare_execution_environment($run->sourcecode);
-
-            $this->task->load_files($files);
-
-            $this->log('debug', "runs_post: compiling job {$this->task->id}");
-            $this->task->compile();
-
-            if (empty($this->task->cmpinfo)) {
-                $this->log('debug', "runs_post: executing job {$this->task->id}");
-                $this->task->execute();
+            // Create the task.
+            $executor = Executors::get($run->language_id, $task);
+            if ($executor == null) {
+                $this->response("Language '$run->language_id' is not known", 400);
             }
 
-            // Success!
-            $this->log('debug', "runs_post: returning 200 OK for task {$this->task->id}");
-            $this->response($this->task->resultObject(), 200);
+            $result = $executor->execute();
+            $this->response(new Result(0, RESULT_SUCCESS, '', $result->output, ''), 200);
 
-        // Report any errors.
+            // Report any errors.
         } catch (JobException $e) {
             $this->log('debug', 'runs_post: ' . $e->getLogMessage());
             $this->response($e->getMessage(), $e->getHttpStatusCode());
 
         } catch (OverloadException $e) {
             $this->log('debug', 'runs_post: overload exception occurred');
-            $resultobject = new ResultObject(0, Task::RESULT_SERVER_OVERLOAD);
+            $resultobject = new Result(0, Executor::RESULT_SERVER_OVERLOAD);
             $this->response($resultobject, 200);
-
+        } catch (CompilationErrorException $e) {
+            $this->response(new Result(0, RESULT_COMPILATION_ERROR, $e->getError(), $e->getOutput(), ''), 200);
         } catch (Exception $e) {
             $this->response('Server exception (' . $e->getMessage() . ')', 500);
         }
@@ -247,7 +259,7 @@ class Restapi extends REST_Controller {
     {
         $this->log('debug', 'languages_get called');
         $langs = array();
-        foreach($this->languages as $lang => $version) {
+        foreach ($this->languages as $lang => $version) {
             $langs[] = array($lang, $version);
         }
         $this->response($langs, 200);
@@ -256,13 +268,14 @@ class Restapi extends REST_Controller {
     // **********************
     // Support functions
     // **********************
-    private function is_valid_filespec($file) {
+    private function is_valid_filespec($file)
+    {
         return (count($file) == 2 || count($file) == 3) &&
-             is_string($file[0]) &&
-             is_string($file[1]) &&
-             strlen($file[0]) >= MIN_FILE_IDENTIFIER_SIZE &&
-             ctype_alnum($file[0]) &&
-             strlen($file[1]) > 0 &&
-             ctype_alnum(str_replace(array('-', '_', '.'), '', $file[1]));
+            is_string($file[0]) &&
+            is_string($file[1]) &&
+            strlen($file[0]) >= MIN_FILE_IDENTIFIER_SIZE &&
+            ctype_alnum($file[0]) &&
+            strlen($file[1]) > 0 &&
+            ctype_alnum(str_replace(array('-', '_', '.'), '', $file[1]));
     }
 }

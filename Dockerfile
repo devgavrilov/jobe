@@ -39,7 +39,7 @@ RUN ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && \
       libapache2-mod-php \
       nodejs \
       octave \
-      openjdk-11-jdk \
+      openjdk-8-jdk \
       php \
       php-cli \
       php-cli \
@@ -65,21 +65,43 @@ RUN ln -snf /usr/share/zoneinfo/"$TZ" /etc/localtime && \
     echo "root:$ROOTPASS" | chpasswd && \
     echo "Jobe" > /var/www/html/index.html;
 
-COPY . /var/www/html/jobe
-RUN apache2ctl start && \
-    cd /var/www/html/jobe && ./install && \
-    chown -R www-data:www-data /var/www/html && \
-    apt-get -y autoremove --purge && \
-    apt-get -y clean && \
-    rm -rf /var/lib/apt/lists/*
-
-RUN apt-get update && apt-get install -y wget && cd /usr/lib && \
+RUN apt-get update
+RUN apt-get install -y wget && cd /usr/lib && \
     wget -q https://github.com/JetBrains/kotlin/releases/download/v1.3.61/kotlin-compiler-1.3.61.zip && \
     unzip kotlin-compiler-*.zip && \
     rm kotlin-compiler-*.zip && \
     rm -f kotlinc/bin/*.bat
 
 ENV PATH $PATH:/usr/lib/kotlinc/bin
+
+ENV ANDROID_HOME /sdk
+
+RUN wget -q https://dl.google.com/android/repository/commandlinetools-linux-6200805_latest.zip && \
+    unzip commandlinetools-linux-6200805_latest.zip -d ${ANDROID_HOME} && \
+    rm commandlinetools-linux-6200805_latest.zip
+
+RUN yes | ${ANDROID_HOME}/tools/bin/sdkmanager --sdk_root=${ANDROID_HOME} --licenses
+RUN yes | ${ANDROID_HOME}/tools/bin/sdkmanager --sdk_root=${ANDROID_HOME} "platform-tools"
+
+RUN chmod -R a=rwx ${ANDROID_HOME}
+
+ENV PATH $PATH:${ANDROID_HOME}/platform-tools
+
+RUN wget -q https://services.gradle.org/distributions/gradle-6.3-bin.zip && \
+    mkdir /opt/gradle && \
+    unzip -d /opt/gradle gradle-6.3-bin.zip && \
+    rm gradle-6.3-bin.zip
+
+ENV PATH $PATH:/opt/gradle/gradle-6.3/bin
+
+COPY . /var/www/html/jobe
+
+RUN apache2ctl start && \
+    cd /var/www/html/jobe && chmod a=rwx ./install && ./install && \
+    chown -R www-data:www-data /var/www/html && \
+    apt-get -y autoremove --purge && \
+    apt-get -y clean && \
+    rm -rf /var/lib/apt/lists/*
 
 # Expose apache
 EXPOSE 80
@@ -89,4 +111,4 @@ HEALTHCHECK --interval=5m --timeout=2s \
     CMD python3 /var/www/html/jobe/minimaltest.py || exit 1
 
 # Start apache
-CMD ["/usr/sbin/apache2ctl", "-D", "FOREGROUND"]
+CMD "/var/www/html/jobe/start.sh"
